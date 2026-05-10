@@ -14,19 +14,40 @@
 // Defines target function.
 static int target = 0;
 
+// Make any read past `size` detectable by ASan/MSan/HWASan: copy `Data`
+// into a heap allocation of *exactly* `size` bytes so the byte
+// immediately after the input is in a poisoned redzone. libFuzzer's
+// own input buffer is over-allocated and would mask out-of-bounds
+// reads of a few bytes past `size`, including the common
+// `array_len == 0` contract violation in Utf8::Decode.
+//
+// The caller owns the returned pointer and must `free` it.
+static uint8_t* CopyToExactBuffer(const uint8_t* Data, size_t size) {
+  uint8_t* p = static_cast<uint8_t*>(malloc(size));
+  if (size > 0 && p != nullptr) {
+    memcpy(p, Data, size);
+  }
+  return p;
+}
+
 // Target function that stresses some unicode methods.
 // Found: http://dartbug.com/36235
 static int TestUnicode(const uint8_t* Data, size_t Size) {
+  // Use an exact-sized copy so a read past `Size` (e.g. an unconditional
+  // `utf8_array[0]` when `Size == 0`) is flagged by the sanitizer rather
+  // than absorbed by libFuzzer's input padding.
+  uint8_t* exact = CopyToExactBuffer(Data, Size);
   dart::Utf8::Type type = dart::Utf8::kLatin1;
-  dart::Utf8::CodeUnitCount(Data, Size, &type);
-  dart::Utf8::IsValid(Data, Size);
+  dart::Utf8::CodeUnitCount(exact, Size, &type);
+  dart::Utf8::IsValid(exact, Size);
   int32_t dst = 0;
-  dart::Utf8::Decode(Data, Size, &dst);
+  dart::Utf8::Decode(exact, Size, &dst);
   uint16_t dst16[1024];
-  dart::Utf8::DecodeToUTF16(Data, Size, dst16, 1024);
+  dart::Utf8::DecodeToUTF16(exact, Size, dst16, 1024);
   int32_t dst32[1024];
-  dart::Utf8::DecodeToUTF32(Data, Size, dst32, 1024);
-  dart::Utf8::ReportInvalidByte(Data, Size, 1024);
+  dart::Utf8::DecodeToUTF32(exact, Size, dst32, 1024);
+  dart::Utf8::ReportInvalidByte(exact, Size, 1024);
+  free(exact);
   return 0;
 }
 
