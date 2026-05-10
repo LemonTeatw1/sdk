@@ -1294,7 +1294,12 @@ if (defined(is_linux) && is_linux && defined(is_asan) && is_asan &&
     (dart_target_arch == "x64" || dart_target_arch == "arm64")) {
   dart_executable("dart_libfuzzer") {
     extra_ldflags = [ "-fsanitize=address,fuzzer" ]
-    extra_deps = [ "..:libdart_libfuzzer" ]
+    # `:dart_snapshot_cc` is needed for the kernel-parser fuzz target
+    # (`--t=2`) which calls `Dart_Initialize` and creates an isolate.
+    extra_deps = [
+      ":dart_snapshot_cc",
+      "..:libdart_libfuzzer",
+    ]
     extra_sources = [
       "../vm/libfuzzer/dart_libfuzzer.cc",
       "common_options.h",
