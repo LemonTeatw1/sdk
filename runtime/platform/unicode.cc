@@ -135,6 +135,10 @@ intptr_t Utf8::Encode(int32_t ch, char* dst) {
 intptr_t Utf8::Decode(const uint8_t* utf8_array,
                       intptr_t array_len,
                       int32_t* dst) {
+  if (array_len <= 0) {
+    *dst = -1;
+    return 0;
+  }
   uint32_t ch = utf8_array[0] & 0xFF;
   intptr_t i = 1;
   if (ch >= 0x80) {
